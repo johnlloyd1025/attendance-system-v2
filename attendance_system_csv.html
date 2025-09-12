@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="tl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendance System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #e0b44d 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .container {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        padding: 60px;
+        max-width: 700px;
+        width: 100%;
+        text-align: center;
+      }
+
+      .header {
+        margin-bottom: 30px;
+      }
+      .header h1 {
+        color: #333;
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+      }
+      .header p {
+        color: #666;
+        font-size: 1.1rem;
+      }
+      .input-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      #idNumber {
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+        font-weight: bold;
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1.1rem;
+      }
+      #idNumber:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+      .employee-info {
+        background: #f0f8ff;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        border-left: 4px solid #667eea;
+      }
+      .employee-info h3 {
+        color: #333;
+        margin-bottom: 5px;
+      }
+      .buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .btn {
+        padding: 15px 30px;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-width: 120px;
+      }
+      .btn-time-in {
+        background: #28a745;
+        color: white;
+      }
+      .btn-time-in:hover {
+        background: #218838;
+        transform: translateY(-2px);
+      }
+      .btn-time-out {
+        background: #dc3545;
+        color: white;
+      }
+      .btn-time-out:hover {
+        background: #c82333;
+        transform: translateY(-2px);
+      }
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .message {
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-weight: bold;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .current-time {
+        background: #e9ecef;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        font-weight: bold;
+        color: #495057;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>CCSICT ATTENDANCE</h1>
+        <p>
+          <i
+            >(College of Computing Studies, <br />
+            Information and Communication Technology)</i
+          >
+        </p>
+      </div>
+
+      <div class="current-time" id="currentTime"></div>
+
+      <div class="input-section">
+        <div class="input-group">
+          <input type="text" id="idNumber" placeholder="ID Number" disabled />
+        </div>
+
+        <div id="employeeInfo" class="employee-info" style="display: none">
+          <h3 id="employeeName"></h3>
+          <p>
+            ID: <span id="employeeId"></span> | Section:
+            <span id="employeeSection"></span>
+          </p>
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button
+          class="btn btn-time-in"
+          id="timeInBtn"
+          disabled
+          onclick="recordAttendance('in')"
+        >
+          🕐 TIME IN
+        </button>
+        <button
+          class="btn btn-time-out"
+          id="timeOutBtn"
+          disabled
+          onclick="recordAttendance('out')"
+        >
+          🕑 TIME OUT
+        </button>
+        <br />
+        <button
+          class="btn"
+          style="background: #17a2b8; color: white; margin-top: 10px"
+          onclick="printAttendance()"
+        >
+          🖨️ PRINT ATTENDANCE
+        </button>
+      </div>
+
+      <div id="message"></div>
+    </div>
+
+    <script>
+      let employeeData = [];
+      let attendanceRecords = [];
+
+      function updateTime() {
+        const now = new Date();
+        const options = {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          timeZone: "Asia/Manila",
+        };
+        document.getElementById("currentTime").textContent =
+          " " + now.toLocaleDateString("en-US", options);
+      }
+      setInterval(updateTime, 1000);
+      updateTime();
+
+      function loadCsvData() {
+        fetch("data/CCSICT_ATTENDANCE.csv")
+          .then((res) => res.text())
+          .then((csv) => {
+            const lines = csv
+              .split(/\r?\n/)
+              .map((l) => l.trim())
+              .filter(Boolean);
+            if (lines.length <= 1)
+              throw new Error("Theres no data in CSV file");
+
+            employeeData = [];
+            for (let i = 1; i < lines.length; i++) {
+              const cols = lines[i].split(",").map((c) => c.trim());
+              if (cols.length < 3) continue;
+
+              const id = cols[0];
+              const section = cols[cols.length - 1];
+              const name = cols.slice(1, cols.length - 1).join(" ");
+
+              if (id && name) employeeData.push({ id, name, section });
+            }
+
+            document.getElementById("idNumber").disabled = false;
+            document.getElementById("idNumber").focus();
+          })
+          .catch((err) => {
+            console.error("❌ Error loading CSV:", err);
+          });
+      }
+
+      window.onload = loadCsvData;
+
+      document
+        .getElementById("idNumber")
+        .addEventListener("input", function () {
+          const idNumber = this.value.trim();
+          const employeeInfo = document.getElementById("employeeInfo");
+          const timeInBtn = document.getElementById("timeInBtn");
+          const timeOutBtn = document.getElementById("timeOutBtn");
+
+          if (!idNumber) {
+            employeeInfo.style.display = "none";
+            timeInBtn.disabled = true;
+            timeOutBtn.disabled = true;
+            return;
+          }
+
+          const employee = employeeData.find((emp) => emp.id === idNumber);
+          if (employee) {
+            document.getElementById("employeeName").textContent = employee.name;
+            document.getElementById("employeeId").textContent = employee.id;
+            document.getElementById("employeeSection").textContent =
+              employee.section;
+            employeeInfo.style.display = "block";
+            timeInBtn.disabled = false;
+            timeOutBtn.disabled = false;
+          } else {
+            employeeInfo.style.display = "none";
+            timeInBtn.disabled = true;
+            timeOutBtn.disabled = true;
+          }
+        });
+
+      function recordAttendance(type) {
+        const idNumber = document.getElementById("idNumber").value.trim();
+        const employee = employeeData.find((emp) => emp.id === idNumber);
+        if (!employee) {
+          showMessage("Student not Found!", "error");
+          return;
+        }
+
+        const now = new Date();
+        const timeString = now.toLocaleTimeString("tl-PH", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          timeZone: "Asia/Manila",
+        });
+
+        attendanceRecords.push({
+          id: employee.id,
+          name: employee.name,
+          section: employee.section,
+          type,
+          time: timeString,
+          timestamp: now.getTime(),
+        });
+
+        const action = type === "in" ? "TIME IN" : "TIME OUT";
+        showMessage(
+          "✅ " + employee.name + " - " + action + " in " + timeString,
+          "success"
+        );
+
+        document.getElementById("idNumber").value = "";
+        document.getElementById("employeeInfo").style.display = "none";
+        document.getElementById("timeInBtn").disabled = true;
+        document.getElementById("timeOutBtn").disabled = true;
+      }
+
+      function showMessage(text, type) {
+        const messageDiv = document.getElementById("message");
+        messageDiv.textContent = text;
+        messageDiv.className = "message " + type;
+        setTimeout(() => {
+          messageDiv.textContent = "";
+          messageDiv.className = "";
+        }, 3000);
+      }
+
+      function printAttendance() {
+        if (employeeData.length === 0) {
+          showMessage("No student data print", "error");
+          return;
+        }
+        const today = new Date();
+        const dateStr = today
+          .toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            timeZone: "Asia/Manila",
+          })
+          .replace(/\//g, "-");
+
+        const sections = {};
+        employeeData.forEach((emp) => {
+          if (!sections[emp.section]) sections[emp.section] = [];
+          sections[emp.section].push(emp);
+        });
+
+        const wb = XLSX.utils.book_new();
+        Object.keys(sections).forEach((sectionName) => {
+          const sectionEmployees = sections[sectionName];
+          const attendanceData = [
+            ["ID Number", "Name", "Time In", "Time Out", "Status"],
+          ];
+
+          sectionEmployees.forEach((emp) => {
+            const empRecords = attendanceRecords.filter((r) => r.id === emp.id);
+            let timeIn = "",
+              timeOut = "",
+              status = "ABSENT";
+            empRecords.forEach((r) => {
+              if (r.type === "in") timeIn = r.time;
+              else if (r.type === "out") timeOut = r.time;
+            });
+            if (timeIn && timeOut) status = "PRESENT";
+            else if (timeIn && !timeOut) status = "PRESENT (No Time Out)";
+            attendanceData.push([emp.id, emp.name, timeIn, timeOut, status]);
+          });
+
+          const ws = XLSX.utils.aoa_to_sheet(attendanceData);
+          ws["!cols"] = [
+            { wch: 12 },
+            { wch: 25 },
+            { wch: 12 },
+            { wch: 12 },
+            { wch: 20 },
+          ];
+          XLSX.utils.book_append_sheet(wb, ws, sectionName);
+        });
+
+        const filename = "Attendance_" + dateStr + ".xlsx";
+        XLSX.writeFile(wb, filename);
+        showMessage(
+          "✅ Generated " +
+            filename +
+            " - " +
+            Object.keys(sections).length +
+            " sections",
+          "success"
+        );
+      }
+    </script>
+  </body>
+</html>
