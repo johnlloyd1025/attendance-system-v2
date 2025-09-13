@@ -261,7 +261,6 @@
             const savedDate = localStorage.getItem("attendanceDate");
             const savedRecords = localStorage.getItem("attendanceRecords");
             const todayStr = getTodayStr();
-
             if (savedDate === todayStr && savedRecords) {
               attendanceRecords = JSON.parse(savedRecords);
             } else {
@@ -383,7 +382,7 @@
           "attendanceRecords",
           JSON.stringify(attendanceRecords)
         );
-        localStorage.setItem("attendanceDate", getTodayStr()); // update date
+        localStorage.setItem("attendanceDate", getTodayStr());
         const action = type === "in" ? "TIME IN" : "TIME OUT";
         showMessage(
           "✅ " + employee.name + " - " + action + " in " + timeString,
@@ -416,7 +415,6 @@
         }
 
         const todayStr = getTodayStr().replace(/\//g, "-");
-
         const programEmployees = employeeData.filter((emp) =>
           emp.section.startsWith(program)
         );
