@@ -134,6 +134,13 @@
         font-weight: bold;
         color: #495057;
       }
+      select {
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        font-weight: bold;
+        margin-bottom: 20px;
+      }
     </style>
   </head>
   <body>
@@ -152,6 +159,14 @@
 
       <div class="input-section">
         <div class="input-group">
+          <select id="programSelect">
+            <option value="">-- Piliin ang Program --</option>
+            <option value="BSIT">BSIT</option>
+            <option value="BLIS">BLIS</option>
+            <option value="BSCS">BSCS</option>
+            <option value="BSDSA">BSDSA</option>
+            <option value="BSIS">BSIS</option>
+          </select>
           <input type="text" id="idNumber" placeholder="ID Number" disabled />
         </div>
 
@@ -198,6 +213,7 @@
       let employeeData = [];
       let attendanceRecords = [];
 
+      // Update current time display
       function updateTime() {
         const now = new Date();
         const options = {
@@ -215,6 +231,11 @@
       setInterval(updateTime, 1000);
       updateTime();
 
+      // Get today's date string
+      function getTodayStr() {
+        return new Date().toLocaleDateString("en-US");
+      }
+
       // Load CSV employee data
       function loadCsvData() {
         fetch("data/CCSICT_ATTENDANCE.csv")
@@ -225,7 +246,6 @@
               .map((l) => l.trim())
               .filter(Boolean);
             if (lines.length <= 1) throw new Error("No data in CSV");
-
             employeeData = [];
             for (let i = 1; i < lines.length; i++) {
               const cols = lines[i].split(",").map((c) => c.trim());
@@ -235,34 +255,69 @@
               const name = cols.slice(1, cols.length - 1).join(" ");
               if (id && name) employeeData.push({ id, name, section });
             }
+            document.getElementById("programSelect").disabled = false;
 
-            document.getElementById("idNumber").disabled = false;
-            document.getElementById("idNumber").focus();
+            // Daily reset of attendance records
+            const savedDate = localStorage.getItem("attendanceDate");
+            const savedRecords = localStorage.getItem("attendanceRecords");
+            const todayStr = getTodayStr();
 
-            // Load saved attendance from localStorage
-            const saved = localStorage.getItem("attendanceRecords");
-            if (saved) attendanceRecords = JSON.parse(saved);
+            if (savedDate === todayStr && savedRecords) {
+              attendanceRecords = JSON.parse(savedRecords);
+            } else {
+              attendanceRecords = [];
+              localStorage.setItem(
+                "attendanceRecords",
+                JSON.stringify(attendanceRecords)
+              );
+              localStorage.setItem("attendanceDate", todayStr);
+            }
           })
           .catch((err) => console.error("❌ Error loading CSV:", err));
       }
       window.onload = loadCsvData;
 
+      // Program selection
+      document
+        .getElementById("programSelect")
+        .addEventListener("change", function () {
+          const program = this.value;
+          const idInput = document.getElementById("idNumber");
+          if (program) {
+            idInput.disabled = false;
+            idInput.value = "";
+            document.getElementById("employeeInfo").style.display = "none";
+            document.getElementById("timeInBtn").disabled = true;
+            document.getElementById("timeOutBtn").disabled = true;
+            idInput.focus();
+          } else {
+            idInput.disabled = true;
+            idInput.value = "";
+            document.getElementById("employeeInfo").style.display = "none";
+          }
+        });
+
+      // ID input
       document
         .getElementById("idNumber")
         .addEventListener("input", function () {
           const idNumber = this.value.trim();
+          const program = document.getElementById("programSelect").value;
           const employeeInfo = document.getElementById("employeeInfo");
           const timeInBtn = document.getElementById("timeInBtn");
           const timeOutBtn = document.getElementById("timeOutBtn");
 
-          if (!idNumber) {
+          if (!idNumber || !program) {
             employeeInfo.style.display = "none";
             timeInBtn.disabled = true;
             timeOutBtn.disabled = true;
             return;
           }
 
-          const employee = employeeData.find((emp) => emp.id === idNumber);
+          // Match employee whose section starts with program
+          const employee = employeeData.find(
+            (emp) => emp.id === idNumber && emp.section.startsWith(program)
+          );
           if (employee) {
             document.getElementById("employeeName").textContent = employee.name;
             document.getElementById("employeeId").textContent = employee.id;
@@ -278,6 +333,7 @@
           }
         });
 
+      // Record attendance
       function recordAttendance(type) {
         const idNumber = document.getElementById("idNumber").value.trim();
         const employee = employeeData.find((emp) => emp.id === idNumber);
@@ -323,12 +379,11 @@
           time: timeString,
           timestamp: now.getTime(),
         });
-
         localStorage.setItem(
           "attendanceRecords",
           JSON.stringify(attendanceRecords)
         );
-
+        localStorage.setItem("attendanceDate", getTodayStr()); // update date
         const action = type === "in" ? "TIME IN" : "TIME OUT";
         showMessage(
           "✅ " + employee.name + " - " + action + " in " + timeString,
@@ -341,6 +396,7 @@
         document.getElementById("timeOutBtn").disabled = true;
       }
 
+      // Show message
       function showMessage(text, type) {
         const messageDiv = document.getElementById("message");
         messageDiv.textContent = text;
@@ -351,23 +407,27 @@
         }, 3000);
       }
 
+      // Print attendance
       function printAttendance() {
-        if (employeeData.length === 0) {
-          showMessage("No student data to print", "error");
+        const program = document.getElementById("programSelect").value;
+        if (!program) {
+          showMessage("Pumili ng program!", "error");
           return;
         }
 
-        const today = new Date();
-        const dateStr = today
-          .toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          })
-          .replace(/\//g, "-");
+        const todayStr = getTodayStr().replace(/\//g, "-");
 
+        const programEmployees = employeeData.filter((emp) =>
+          emp.section.startsWith(program)
+        );
+        if (programEmployees.length === 0) {
+          showMessage("No students in selected program!", "error");
+          return;
+        }
+
+        // Group by section
         const sections = {};
-        employeeData.forEach((emp) => {
+        programEmployees.forEach((emp) => {
           if (!sections[emp.section]) sections[emp.section] = [];
           sections[emp.section].push(emp);
         });
@@ -402,7 +462,7 @@
           XLSX.utils.book_append_sheet(wb, ws, sectionName);
         });
 
-        const filename = "Attendance_" + dateStr + ".xlsx";
+        const filename = "Attendance_" + program + "_" + todayStr + ".xlsx";
         XLSX.writeFile(wb, filename);
         showMessage(
           "✅ Generated " +
