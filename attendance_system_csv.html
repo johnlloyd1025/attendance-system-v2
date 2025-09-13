@@ -29,7 +29,6 @@
         width: 100%;
         text-align: center;
       }
-
       .header {
         margin-bottom: 30px;
       }
@@ -143,8 +142,8 @@
         <h1>CCSICT ATTENDANCE</h1>
         <p>
           <i
-            >(College of Computing Studies, <br />
-            Information and Communication Technology)</i
+            >(College of Computing Studies, Information and Communication
+            Technology)</i
           >
         </p>
       </div>
@@ -216,6 +215,7 @@
       setInterval(updateTime, 1000);
       updateTime();
 
+      // Load CSV employee data
       function loadCsvData() {
         fetch("data/CCSICT_ATTENDANCE.csv")
           .then((res) => res.text())
@@ -224,29 +224,27 @@
               .split(/\r?\n/)
               .map((l) => l.trim())
               .filter(Boolean);
-            if (lines.length <= 1)
-              throw new Error("Theres no data in CSV file");
+            if (lines.length <= 1) throw new Error("No data in CSV");
 
             employeeData = [];
             for (let i = 1; i < lines.length; i++) {
               const cols = lines[i].split(",").map((c) => c.trim());
               if (cols.length < 3) continue;
-
               const id = cols[0];
               const section = cols[cols.length - 1];
               const name = cols.slice(1, cols.length - 1).join(" ");
-
               if (id && name) employeeData.push({ id, name, section });
             }
 
             document.getElementById("idNumber").disabled = false;
             document.getElementById("idNumber").focus();
-          })
-          .catch((err) => {
-            console.error("❌ Error loading CSV:", err);
-          });
-      }
 
+            // Load saved attendance from localStorage
+            const saved = localStorage.getItem("attendanceRecords");
+            if (saved) attendanceRecords = JSON.parse(saved);
+          })
+          .catch((err) => console.error("❌ Error loading CSV:", err));
+      }
       window.onload = loadCsvData;
 
       document
@@ -296,6 +294,27 @@
           timeZone: "Asia/Manila",
         });
 
+        if (type === "in") {
+          const existing = attendanceRecords.find(
+            (r) => r.id === employee.id && r.type === "in"
+          );
+          if (existing) {
+            showMessage(employee.name + " already TIMED IN", "error");
+            return;
+          }
+        } else if (type === "out") {
+          const timeInRecord = attendanceRecords.find(
+            (r) => r.id === employee.id && r.type === "in"
+          );
+          if (!timeInRecord) {
+            showMessage(employee.name + " has not TIMED IN yet!", "error");
+            return;
+          }
+          attendanceRecords = attendanceRecords.filter(
+            (r) => !(r.id === employee.id && r.type === "out")
+          );
+        }
+
         attendanceRecords.push({
           id: employee.id,
           name: employee.name,
@@ -304,6 +323,11 @@
           time: timeString,
           timestamp: now.getTime(),
         });
+
+        localStorage.setItem(
+          "attendanceRecords",
+          JSON.stringify(attendanceRecords)
+        );
 
         const action = type === "in" ? "TIME IN" : "TIME OUT";
         showMessage(
@@ -329,16 +353,16 @@
 
       function printAttendance() {
         if (employeeData.length === 0) {
-          showMessage("No student data print", "error");
+          showMessage("No student data to print", "error");
           return;
         }
+
         const today = new Date();
         const dateStr = today
           .toLocaleDateString("en-US", {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
-            timeZone: "Asia/Manila",
           })
           .replace(/\//g, "-");
 
@@ -354,7 +378,6 @@
           const attendanceData = [
             ["ID Number", "Name", "Time In", "Time Out", "Status"],
           ];
-
           sectionEmployees.forEach((emp) => {
             const empRecords = attendanceRecords.filter((r) => r.id === emp.id);
             let timeIn = "",
@@ -368,7 +391,6 @@
             else if (timeIn && !timeOut) status = "PRESENT (No Time Out)";
             attendanceData.push([emp.id, emp.name, timeIn, timeOut, status]);
           });
-
           const ws = XLSX.utils.aoa_to_sheet(attendanceData);
           ws["!cols"] = [
             { wch: 12 },
